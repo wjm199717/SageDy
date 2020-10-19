@@ -153,7 +153,7 @@ class SageDy(Model):
             dims: a list of dimensions of the hidden representations from the input layer to the
                 final layer. Length is the number of layers + 1.
             num_samples: list of number of samples for each layer.
-            support_sizes(需要聚合邻居节点的数量): the number of nodes to gather information from for each layer.
+            support_sizes: the number of nodes to gather information from for each layer.
             batch_size: the number of inputs (different for batch inputs and negative samples).
         Returns:
             The hidden representation at the final layer for all nodes in batch
@@ -286,7 +286,9 @@ class SageDy(Model):
         first_influence_outputs = []
         for time in range(self.num_time_steps):
             time_spacing = self.num_time_steps - 1 - time 
-            influence_factor1 = math.exp(-time_spacing)
+            delta = tf.get_variable('delta'+str(time), shape=[], initializer=tf.constant_initializer(1))
+            time_spacing_intensity = tf.multiply(delta, time_spacing)
+            influence_factor1 = tf.exp(-time_spacing_intensity)
             node_embeddings = noinfluence_structural_outputs[:, time, :]
             node_embeddings = tf.divide(node_embeddings, 1/influence_factor1)
             first_influence_outputs.append(node_embeddings)
@@ -304,11 +306,13 @@ class SageDy(Model):
             information_change_total.append(information_change)
         max_index = tf.arg_max(information_change_total, 0)
         history_time = max_index + 1
+        delta = tf.get_variable('delta', shape=[], initializer=tf.constant_initializer(1))
         current_time = self.num_time_steps - 1
         time_spacing = current_time - history_time
         node_embedding = noinfluence_structural_outputs[:, history_time, :]
         time_spacing = tf.cast(time_spacing, dtype = tf.float32)
-        influence_factor2 = tf.exp(-time_spacing) + 1
+        time_spacing_intensity = tf.multiply(delta, time_spacing)
+        influence_factor2 = tf.exp(-time_spacing_intensity) + 1
         influence_structure_output = tf.divide(node_embedding, 1/influence_factor2)
         influence_structure_output = tf.add(influence_structure_output, structural_outputs[:,history_time,:])
         influence_structure_output = tf.divide(influence_structure_output, 2)
